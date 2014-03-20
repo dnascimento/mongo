@@ -69,6 +69,8 @@
 #include "mongo/util/mmap.h"
 #include "mongo/util/text.h"
 
+#include "undoSender.h"
+
 using namespace std;
 using mongo::Message;
 using mongo::MsgData;
@@ -84,8 +86,10 @@ using mongo::MemoryMappedFile;
 int captureHeaderSize;
 set<int> serverPorts;
 string forwardAddress;
+string remoteLogAddress;
 bool objcheck = false;
 
+UndoSender* undoSender;
 ostream *outPtr = &cout;
 ostream &out() { return *outPtr; }
 
@@ -171,12 +175,11 @@ map< Connection, map< long long, long long > > mapCursor;
 void processMessage( Connection& c , Message& d );
 
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
-
     const struct sniff_ip* ip = (struct sniff_ip*)(packet + captureHeaderSize);
     int size_ip = IP_HL(ip)*4;
     if ( size_ip < 20 ) {
         cerr << "*** Invalid IP header length: " << size_ip << " bytes" << endl;
-        return;
+        //return;
     }
 
     verify( ip->ip_p == IPPROTO_TCP );
@@ -227,6 +230,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
             cerr << "Invalid message start, skipping packet." << endl;
             return;
         }
+        //TODO
         if ( size_payload > m.header()->len ) {
             cerr << "Multiple messages in packet, skipping packet." << endl;
             return;
@@ -254,8 +258,8 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
         messageBuilder[ c ].reset();
     }
 
+    //Src/Dest IP:Port  numb of bytes
     DbMessage d( m );
-
     out() << inet_ntoa(ip->ip_src) << ":" << ntohs( tcp->th_sport )
           << ( serverPorts.count( ntohs( tcp->th_dport ) ) ? "  -->> " : "  <<--  " )
           << inet_ntoa(ip->ip_dst) << ":" << ntohs( tcp->th_dport )
@@ -281,7 +285,6 @@ public:
 
 void processMessage( Connection& c , Message& m ) {
     AuditingDbMessage d(m);
-
     if ( m.operation() == mongo::opReply )
         out() << " - " << (unsigned)m.header()->responseTo;
     out() << '\n';
@@ -352,8 +355,11 @@ void processMessage( Connection& c , Message& m ) {
     catch ( ... ) {
         cerr << "Error parsing message for operation: " << m.operation() << endl;
     }
+    //TODO Código para enviar o pedido para o meu servidor
 
 
+
+    //se houver outro servidor para encaminhar
     if ( !forwardAddress.empty() ) {
         if ( m.operation() != mongo::opReply ) {
             boost::shared_ptr<DBClientConnection> conn = forwarder[ c ];
@@ -448,6 +454,7 @@ void usage() {
          "                when there are dropped tcp packets.\n"
          "<port0>...      These parameters are used to filter sniffing.  By default, \n"
          "                only port 27017 is sniffed.\n"
+         "--remote        Forward all parsed requests log to remote protobuf instance host:port\n"
          << endl;
 }
 
@@ -486,6 +493,13 @@ int toolMain(int argc, char **argv, char** envp) {
             if ( arg == string( "--help" ) ) {
                 usage();
                 return 0;
+            }else if( arg == string("--remote" ) ) {
+                const char* hostname = args[++i];
+                int port = atoi(args[++i]);
+                undoSender = new UndoSender(hostname,port);
+            }
+            else if ( arg == string("--remove" ) ) {
+                remoteLogAddress = args[++i];
             }
             else if ( arg == string( "--forward" ) ) {
                 forwardAddress = args[ ++i ];
@@ -574,7 +588,7 @@ int toolMain(int argc, char **argv, char** envp) {
     pcap_freecode(&fp);
     pcap_close(handle);
 
-    return 0;
+    return 0; 
 }
 
 #if defined(_WIN32)

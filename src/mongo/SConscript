@@ -913,6 +913,7 @@ env.Library("mongodwebserver",
 mongodOnlyFiles = [ "db/db.cpp", "db/commands/touch.cpp", "db/mongod_options_init.cpp" ]
 
 # ----- TARGETS ------
+env.Library(target="undoSender",source=["tools/undoSender.cpp","tools/undo_database.pb.cc"], LIBS=['protobuf'],LIBPATH=['/usr/local/lib/'])
 
 env.Library("gridfs", "client/gridfs.cpp")
 
@@ -1073,8 +1074,16 @@ if darwin or env["_HAVEPCAP"]:
     else:
         sniffEnv.Append( LIBS=[ "wpcap" ] )
 
+    sniffEnv.Append( CPPPATH=[ "/usr/local/include" ] )
+    sniffEnv.Append( LIBPATH=[ "/usr/local/lib" ] )
+    sniffEnv.Append( LIBS=[ "protobuf"])
+    sniffEnv.Append( SHLINKFLAGS=["-v"] )
+    env.Append( SHLINKFLAGS=["-v"] )
+
+    # env.Append( CCFLAGS=["-D_THREAD_SAFE","-I/usr/local/include"] )
+    # env.Append( LINKFLAGS=["-D_THREAD_SAFE","-I/usr/local/include"] )
     sniffEnv.Install( '#/', sniffEnv.Program( "mongosniff", "tools/sniffer.cpp",
-                                              LIBDEPS=["gridfs", "serveronly", "coreserver", "coredb"]))
+                                              LIBDEPS=["gridfs", "serveronly", "coreserver", "coredb","undoSender"]))
 
 # --- shell ---
 

@@ -1373,7 +1373,7 @@ def doConfigure(myenv):
 
         conf.env.Append( CPPDEFINES=[ "MONGO_HAVE_EXECINFO_BACKTRACE" ] )
 
-    conf.env["_HAVEPCAP"] = conf.CheckLib( ["pcap", "wpcap"], autoadd=False )
+    conf.env["_HAVEPCAP"] = conf.CheckLib( ["pcap","protobuf" "wpcap"], autoadd=False )
 
     if solaris:
         conf.CheckLib( "nsl" )
